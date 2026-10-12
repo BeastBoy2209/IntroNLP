@@ -5,7 +5,7 @@
 - Timur Kharitonov
 - Danial Kairov
 
-**Current Status:** Week 6 Completed $\rightarrow$ Proceeding to Week 7
+**Current Status:** Week 7 Completed $\rightarrow$ Proceeding to Week 8
 
 ---
 
@@ -30,9 +30,13 @@
     - Sentiment-aware stopword policy preventing negation inversion (`not`, `no`, `never`).
     - Generation of preprocessed datasets (`train_cleaned.csv`, `test_cleaned.csv`).
 
-- [ ] **Week 7: Feature Engineering & Baseline Model**
-  - Feature extraction using TF-IDF (term frequency-inverse document frequency) with n-gram range tuning.
-  - Training of the baseline classifier (Logistic Regression with class weighting).
+- [x] **Week 7: Feature Engineering, Veiled Toxicity Mitigation & Baseline Model**
+  - Feature extraction using TF-IDF with sublinear scaling and contextual N-gram expansion (`ngram_range=(1, 3)`).
+  - **Supervisor Feedback Integration (Veiled Toxicity / Compositional Litotes):**
+    - Handling euphemistic and negated positive insults (e.g., *"not smart enough"*, *"not very bright"*, *"lacks intelligence"*).
+    - Sliding-window compositional litotes binding (`not_smart`, `not_smart_enough`, `veiled_insult_litotes`) and leetspeak demasking (`st00pid` $\rightarrow$ `stupid`).
+    - Contrastive calibration pairing personal cognitive litotes (`Toxic`) against benign impersonal negations (`Normal`).
+  - Training and serialisation of the class-weighted Logistic Regression baseline (`models/baseline_logreg.joblib`, `models/tfidf_vectorizer.joblib`), achieving **91.78% Macro F1**.
 
 - [ ] **Week 8: Baseline Evaluation & Diagnostic Error Analysis**
   - Model evaluation using multi-class metrics: Accuracy, Precision, Recall, and Macro/Weighted F1-score.

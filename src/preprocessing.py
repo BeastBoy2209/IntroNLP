@@ -2,6 +2,7 @@
 Text Preprocessing and Normalisation Pipeline.
 Designed for Automated Content Moderation (Normal, Toxic, Spam).
 Includes contraction expansion, URL/HTML sanitization, elongation reduction,
+leetspeak/obfuscation demasking, compositional litotes (veiled toxicity) detection,
 sentiment-aware stopword filtering, and lemmatization/stemming.
 """
 import re
@@ -86,17 +87,57 @@ CONTRACTION_MAP = {
     "w/o": "without",
 }
 
-# Negation and critical modifiers to protect from stopword elimination
+# Negation, diminishers, degree hedges, and second-person pronouns to protect from stopword removal
 PROTECTED_WORDS = {
     "not", "no", "nor", "neither", "never", "none", "nobody",
     "cannot", "without", "against", "ain", "aren", "couldn", 
     "didn", "doesn", "hadn", "hasn", "haven", "isn", "mustn",
-    "needn", "shouldn", "wasn", "weren", "won", "wouldn"
+    "needn", "shouldn", "wasn", "weren", "won", "wouldn",
+    # Diminishers & degree modifiers critical for veiled toxicity (litotes)
+    "hardly", "barely", "scarcely", "enough", "very", "too", "less", "least",
+    "lack", "lacking", "zero", "low",
+    # Second-person targeting pronouns (personal attack context)
+    "you", "your", "yours", "yourself", "yourselves"
 }
+
+# Leetspeak and obfuscated profanity/insult normalization
+OBFUSCATION_PATTERNS = [
+    (re.compile(r'\bf[\*\!\@\#\$\%\^\&\_\.u]+c?k+\b', re.I), 'fuck'),
+    (re.compile(r'\bs[\*\!\@\#\$\%\^\&\_\.h]+i+t+\b', re.I), 'shit'),
+    (re.compile(r'\bb[\*\!\@\#\$\%\^\&\_\.i1]+t+c+h+\b', re.I), 'bitch'),
+    (re.compile(r'\ba[\$s]{2,}\b', re.I), 'ass'),
+    (re.compile(r'\bst[0o]{2,}p[i1]d\b', re.I), 'stupid'),
+    (re.compile(r'\b[i1]d[1i!][0o]t\b', re.I), 'idiot'),
+    (re.compile(r'\bm[0o]r[0o]n\b', re.I), 'moron'),
+    (re.compile(r'\bd[\*\!\@\#\$\%u]+mb\b', re.I), 'dumb'),
+    (re.compile(r'\br[3e]t[4a\*]rd\b', re.I), 'retard'),
+]
+
+# Positive cognitive/competence/social attributes often inverted in veiled toxicity (litotes)
+POSITIVE_COGNITIVE_TRAITS = {
+    "smart", "intelligent", "intelligence", "bright", "clever", "wise", "wisdom",
+    "genius", "sharp", "educated", "literate", "competent", "competence", "capable",
+    "brain", "brains", "sense", "logic", "iq", "intellectual", "gifted", "talented",
+    "brilliant", "useful", "worth", "valuable", "decent", "polite", "civil",
+    "mature", "sane", "sanity", "knowledge", "ability"
+}
+
+NEGATION_TRIGGERS = {
+    "not", "no", "never", "neither", "nor", "cannot", "without",
+    "hardly", "barely", "scarcely", "lack", "lacks", "lacking", "zero", "low"
+}
+
+# Pre-compiled multi-word veiled insult idioms
+VEILED_IDIOM_PATTERNS = [
+    re.compile(r'\b(room\s+temperature\s+iq|single\s+digit\s+iq|negative\s+iq|low\s+iq|zero\s+iq)\b', re.I),
+    re.compile(r'\b(not\s+the\s+sharpest|sharpest\s+tool|few\s+clowns\s+short|elevator\s+does\s+not\s+go)\b', re.I),
+    re.compile(r'\b(waste\s+of\s+oxygen|waste\s+of\s+space|smooth\s+brain|brain\s+dead|oxygen\s+thief)\b', re.I),
+]
 
 class TextPreprocessor:
     """
     Configurable, high-throughput text preprocessor for multi-class content moderation.
+    Handles explicit toxicity, obfuscated profanity, and veiled compositional toxicity (litotes).
     """
     def __init__(
         self,
@@ -106,6 +147,8 @@ class TextPreprocessor:
         replace_urls: bool = True,
         url_token: str = " <URL> ",
         normalize_elongations: bool = True,
+        demask_obfuscation: bool = True,
+        resolve_veiled_toxicity: bool = True,
         remove_punctuation: bool = True,
         remove_stopwords: bool = True,
         preserve_negations: bool = True,
@@ -118,6 +161,8 @@ class TextPreprocessor:
         self.replace_urls = replace_urls
         self.url_token = url_token
         self.normalize_elongations = normalize_elongations
+        self.demask_obfuscation = demask_obfuscation
+        self.resolve_veiled_toxicity = resolve_veiled_toxicity
         self.remove_punctuation = remove_punctuation
         self.remove_stopwords = remove_stopwords
         self.preserve_negations = preserve_negations
@@ -134,7 +179,7 @@ class TextPreprocessor:
         self._html_pattern = re.compile(r'<.*?>')
         self._elongation_pattern = re.compile(r'(.)\1{2,}')
         self._whitespace_pattern = re.compile(r'\s+')
-        self._token_pattern = re.compile(r'\b[a-zA-Z]{2,}\b')
+        self._token_pattern = re.compile(r'\b[a-zA-Z_]{2,}\b')
 
     @property
     def stopwords(self) -> Set[str]:
@@ -143,7 +188,6 @@ class TextPreprocessor:
                 from nltk.corpus import stopwords
                 raw_stops = set(stopwords.words('english'))
             except Exception:
-                # Fallback basic English stopwords if NLTK corpus unready
                 raw_stops = {
                     "a", "about", "above", "after", "again", "all", "am", "an", "and",
                     "any", "are", "as", "at", "be", "because", "been", "before", "being",
@@ -182,7 +226,7 @@ class TextPreprocessor:
 
     def clean_text(self, text: str) -> str:
         """
-        Executes text sanitation steps (HTML, URLs, contractions, elongations).
+        Executes text sanitation steps (HTML, URLs, contractions, leetspeak, elongations).
         """
         if not isinstance(text, str):
             text = str(text) if text is not None else ""
@@ -198,9 +242,13 @@ class TextPreprocessor:
         else:
             text = self._url_pattern.sub(' ', text)
 
-        # 3. Contraction Expansion
+        # 3. Demask Leetspeak & Obfuscated Profanity
+        if self.demask_obfuscation:
+            for pattern, replacement in OBFUSCATION_PATTERNS:
+                text = pattern.sub(replacement, text)
+
+        # 4. Contraction Expansion
         if self.expand_contractions:
-            # Tokenize on whitespace and replace matching contractions
             tokens = text.split()
             expanded_tokens = []
             for t in tokens:
@@ -213,30 +261,28 @@ class TextPreprocessor:
                     expanded_tokens.append(t)
             text = " ".join(expanded_tokens)
 
-        # 4. Lowercasing
+        # 5. Lowercasing
         if self.lower:
             text = text.lower()
 
-        # 5. Normalise character elongations (e.g., 'sooo' -> 'soo', 'fuuuck' -> 'fuuck')
+        # 6. Normalise character elongations (e.g., 'sooo' -> 'soo', 'fuuuck' -> 'fuuck')
         if self.normalize_elongations:
             text = self._elongation_pattern.sub(r'\1\1', text)
 
-        # 6. Punctuation handling
+        # 7. Punctuation handling
         if self.remove_punctuation:
-            # Preserve special tokens like <URL>
             tokens = text.split()
             cleaned = []
             for tok in tokens:
                 if tok in ("<url>", "<URL>"):
-                    cleaned.append(tok)
+                    cleaned.append("url")
                 else:
-                    # Strip punctuation
                     stripped = tok.translate(str.maketrans('', '', string.punctuation))
                     if stripped:
                         cleaned.append(stripped)
             text = " ".join(cleaned)
 
-        # 7. Normalize whitespaces
+        # 8. Normalize whitespaces
         text = self._whitespace_pattern.sub(' ', text).strip()
         return text
 
@@ -247,6 +293,41 @@ class TextPreprocessor:
         tokens = self._token_pattern.findall(text)
         return tokens
 
+    def _inject_veiled_toxicity_markers(self, tokens: List[str], raw_cleaned: str) -> List[str]:
+        """
+        Detects compositional litotes (e.g., 'not smart', 'not smart enough', 'hardly bright',
+        'lack intelligence') and binds them into compound tokens + semantic indicator.
+        """
+        augmented = list(tokens)
+        veiled_detected = False
+
+        # Check multi-word idioms first
+        for pattern in VEILED_IDIOM_PATTERNS:
+            if pattern.search(raw_cleaned):
+                veiled_detected = True
+
+        # Sliding window compositional check: Negation/Diminisher + [optional modifier] + Positive Trait
+        n = len(tokens)
+        for i in range(n):
+            if tokens[i] in NEGATION_TRIGGERS:
+                # Look ahead up to 3 tokens within the clause
+                window = tokens[i+1 : min(i+4, n)]
+                for j, w in enumerate(window):
+                    if w in POSITIVE_COGNITIVE_TRAITS:
+                        # Bind compound token, e.g. 'not_smart'
+                        compound = f"not_{w}"
+                        augmented.append(compound)
+                        # Check if followed by 'enough' (e.g., 'not smart enough')
+                        if i + 1 + j + 1 < n and tokens[i + 1 + j + 1] == "enough":
+                            augmented.append(f"not_{w}_enough")
+                        veiled_detected = True
+                        break
+
+        if veiled_detected:
+            augmented.append("veiled_insult_litotes")
+
+        return augmented
+
     def transform(self, text: str) -> str:
         """
         Full end-to-end preprocessing transformation returning cleaned string.
@@ -254,7 +335,7 @@ class TextPreprocessor:
         cleaned = self.clean_text(text)
         tokens = self.tokenize(cleaned)
 
-        # Stopword removal
+        # Stopword removal (preserving negations, hedges, and 2nd-person pronouns)
         if self.remove_stopwords:
             stops = self.stopwords
             tokens = [w for w in tokens if w not in stops]
@@ -267,49 +348,21 @@ class TextPreprocessor:
             stemmer = self.stemmer
             tokens = [stemmer.stem(w) for w in tokens]
 
+        # Compositional Litotes & Veiled Toxicity Resolution
+        if self.resolve_veiled_toxicity:
+            tokens = self._inject_veiled_toxicity_markers(tokens, cleaned)
+
         return " ".join(tokens)
 
-def batch_preprocess_dataset(
-    input_path: str,
-    output_path: str,
-    preprocessor: Optional[TextPreprocessor] = None,
-    text_column: str = "text"
-):
-    """
-    Applies the preprocessing pipeline across a full dataset CSV in batches.
-    """
-    import pandas as pd
-    from tqdm import tqdm
-    tqdm.pandas()
-
-    if preprocessor is None:
-        preprocessor = TextPreprocessor(
-            lower=True,
-            expand_contractions=True,
-            remove_html=True,
-            replace_urls=True,
-            normalize_elongations=True,
-            remove_stopwords=True,
-            preserve_negations=True,
-            lemmatize=True
-        )
-
-    print(f"Reading dataset: {input_path}")
-    df = pd.read_csv(input_path)
-    print(f"Transforming {len(df):,} rows using TextPreprocessor...")
-    df['cleaned_text'] = df[text_column].progress_apply(preprocessor.transform)
-    
-    # Drop empty results if any
-    initial_len = len(df)
-    df = df[df['cleaned_text'].str.strip().str.len() > 0]
-    print(f"Filtered {initial_len - len(df)} empty rows after preprocessing.")
-
-    df.to_csv(output_path, index=False)
-    print(f"Preprocessed dataset saved to: {output_path}")
-    return df
-
 if __name__ == "__main__":
-    demo_sample = "Don't visit http://phishing.site/free-money, you're sooooo stupid &amp; ugly!!!"
-    prep = TextPreprocessor(lemmatize=True, preserve_negations=True)
-    print("Original Text:   ", demo_sample)
-    print("Cleaned & Transformed:", prep.transform(demo_sample))
+    samples = [
+        "Don't visit http://phishing.site/free-money, you're sooooo stupid &amp; ugly!!!",
+        "Honestly, you are not smart enough to understand this topic.",
+        "He is hardly bright and clearly lacks intelligence.",
+        "Stop acting like an id10t and st00pid troll."
+    ]
+    prep = TextPreprocessor(lemmatize=True, preserve_negations=True, resolve_veiled_toxicity=True)
+    for s in samples:
+        print("RAW:   ", s)
+        print("CLEAN: ", prep.transform(s))
+        print("-" * 60)
