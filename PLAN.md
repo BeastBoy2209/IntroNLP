@@ -5,7 +5,7 @@
 - Timur Kharitonov
 - Danial Kairov
 
-**Current Status:** Week 7 Completed $\rightarrow$ Proceeding to Week 8
+**Current Status:** Week 8 Completed $\rightarrow$ Proceeding to Week 9
 
 ---
 
@@ -38,9 +38,14 @@
     - Contrastive calibration pairing personal cognitive litotes (`Toxic`) against benign impersonal negations (`Normal`).
   - Training and serialisation of the class-weighted Logistic Regression baseline (`models/baseline_logreg.joblib`, `models/tfidf_vectorizer.joblib`), achieving **91.78% Macro F1**.
 
-- [ ] **Week 8: Baseline Evaluation & Diagnostic Error Analysis**
-  - Model evaluation using multi-class metrics: Accuracy, Precision, Recall, and Macro/Weighted F1-score.
-  - Generation and interpretation of Confusion Matrix to identify inter-class confusion patterns (e.g., Toxic vs Normal boundary cases).
+- [x] **Week 8: Baseline Diagnostic Evaluation & Qualitative Error Taxonomy**
+  - Comprehensive out-of-sample evaluation on the 11,376 test partition:
+    - Overall Accuracy: **92.34%**, Macro-averaged F1: **91.78%**, Macro ROC-AUC: **0.9811**.
+  - Generation of absolute and normalized Confusion Matrices (`reports/figures/confusion_matrix.png`).
+  - ROC and Precision-Recall curve analyses across all three classes (`reports/figures/roc_curves.png`, `reports/figures/precision_recall_curves.png`).
+  - Diagnostic error audit of 871 misclassified instances (`reports/error_analysis.csv`):
+    - Identified primary confusion between Normal $\leftrightarrow$ Toxic boundary (quotation of slurs, subtle sarcasm, novel misspellings).
+    - Established qualitative 4-part linguistic error taxonomy directly motivating Week 9 alternative classifiers (Multinomial Naive Bayes, Linear SVM).
 
 - [ ] **Week 9: Alternative Model Exploration & Model Selection**
   - Training and hyperparameter tuning of alternative algorithms (Multinomial Naive Bayes, Linear SVM).
