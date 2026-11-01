@@ -5,7 +5,7 @@
 - Timur Kharitonov
 - Danial Kairov
 
-**Current Status:** Week 8 Completed $\rightarrow$ Proceeding to Week 9
+**Current Status:** Week 10 Completed $\rightarrow$ Proceeding to Week 11
 
 ---
 
@@ -47,14 +47,27 @@
     - Identified primary confusion between Normal $\leftrightarrow$ Toxic boundary (quotation of slurs, subtle sarcasm, novel misspellings).
     - Established qualitative 4-part linguistic error taxonomy directly motivating Week 9 alternative classifiers (Multinomial Naive Bayes, Linear SVM).
 
-- [ ] **Week 9: Alternative Model Exploration & Model Selection**
-  - Training and hyperparameter tuning of alternative algorithms (Multinomial Naive Bayes, Linear SVM).
-  - Comparative benchmark analysis across models.
-  - Selection of the optimal production model based on F1-score to balance false positives and false negatives.
+- [x] **Week 9: Alternative Model Exploration, Benchmarking & Production Model Selection**
+  - Systematic training and hyperparameter tuning across 6 architectures:
+    - Generative models: Multinomial Naive Bayes (Laplace $\alpha=0.1$), Complement Naive Bayes ($\alpha=0.5$).
+    - Discriminative models: Logistic Regression baseline ($C=2.0$, balanced), Linear SVM ($C=1.0$, balanced).
+    - Calibrated & Ensemble models: Calibrated Linear SVM (Platt scaling), Soft-Voting Meta-Ensemble.
+  - Multi-metric benchmark on held-out test set ($N=11,376$):
+    - **Winning Architecture:** Soft-Voting Ensemble (LR + Calibrated SVM) achieving peak **Macro F1 of 92.25%** and **Accuracy of 92.67%**, with a 25% reduction in false-positive censorship (346 vs 461 in baseline).
+    - Latency benchmarking: Sub-microsecond inference (0.7 µs/doc, >1.4M msg/s).
+    - Veiled toxicity stress-testing: 100% detection rate across litotes and obfuscated profanity.
+  - Serialization of winning production model (`models/production_model.joblib`) and deployment metadata (`models/production_metadata.json`) ready for Week 10 FastAPI serving.
 
-- [ ] **Week 10: Production Web API Development**
-  - Development of a lightweight, asynchronous RESTful API using FastAPI.
-  - Implementation of the `POST /predict` endpoint returning the predicted class label, confidence score, and processing latency.
+- [x] **Week 10: Production Web API Development & Microservice Serving**
+  - Development of an asynchronous, high-throughput REST API using **FastAPI** (`src/api.py`).
+  - Implementation of strict Pydantic data contracts (`PredictionRequest`, `BatchPredictionRequest`, `PredictionResponse`).
+  - Implemented core production endpoints:
+    - `POST /predict`: Single message real-time classification with confidence, class probabilities, and moderation flags.
+    - `POST /predict/batch`: High-throughput vectorized batch classification (up to 100 messages simultaneously).
+    - `GET /health`: Automated readiness and health probe for container orchestration.
+    - `GET /docs`: Self-documenting OpenAPI (Swagger UI) interface.
+  - Implemented asynchronous `lifespan` pre-warming eliminating cold-start latency, achieving median latency of **0.28 ms/req** (>2,000 req/s).
+  - Built comprehensive test suite (`tests/test_api.py`) with 11 automated pytest integration tests passing at 100%.
 
 - [ ] **Week 11: Interactive User Interface (UI)**
   - Development of a web demonstration interface using Streamlit.
