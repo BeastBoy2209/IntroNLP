@@ -5,7 +5,7 @@
 - Timur Kharitonov
 - Danial Kairov
 
-**Current Status:** Week 10 Completed $\rightarrow$ Proceeding to Week 11
+**Current Status:** Week 11 Completed $\rightarrow$ Proceeding to Week 12
 
 ---
 
@@ -69,9 +69,15 @@
   - Implemented asynchronous `lifespan` pre-warming eliminating cold-start latency, achieving median latency of **0.28 ms/req** (>2,000 req/s).
   - Built comprehensive test suite (`tests/test_api.py`) with 11 automated pytest integration tests passing at 100%.
 
-- [ ] **Week 11: Interactive User Interface (UI)**
-  - Development of a web demonstration interface using Streamlit.
-  - Interactive test suite allowing users to test custom inputs, visualize prediction confidences, and view token attributions.
+- [x] **Week 11: Interactive User Interface (UI) & Demonstration Portal**
+  - Development of a full-featured web demonstration studio using **Streamlit** (`src/app.py`).
+  - Built 4 interactive analytical workspaces:
+    - **Module 1 (Real-Time Analyzer):** Interactive single-message classification with quick diagnostic preset buttons (slurs, commercial spam, litotes *"not smart enough"*).
+    - **Module 2 (Explainable AI / Token Attribution):** Local feature attribution breaking down semantic contributions of compounds (`not_smart_enough`, `veiled_insult_litotes`).
+    - **Module 3 (Batch Moderation Simulator):** Multi-line and CSV batch processor with live charts, category distributions, and downloadable reports.
+    - **Module 4 (Diagnostic Leaderboard & Architecture Blueprint):** Interactive benchmark viewer and end-to-end REST microservice integration diagram.
+  - Configurable policy controls: Dynamic confidence threshold slider ($\tau$) and strict zero-tolerance toggle.
+  - Generated academic notebook (`notebooks/07_ui_development_week11.ipynb`) and HTML report (`reports/07_ui_development_week11.html`).
 
 - [ ] **Week 12: Telegram Bot Integration & Moderation Engine**
   - Integration of the classifier API with a Telegram bot for automated group/channel moderation.
