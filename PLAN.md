@@ -79,9 +79,21 @@
   - Configurable policy controls: Dynamic confidence threshold slider ($\tau$) and strict zero-tolerance toggle.
   - Generated academic notebook (`notebooks/07_ui_development_week11.ipynb`) and HTML report (`reports/07_ui_development_week11.html`).
 
-- [ ] **Week 12: Telegram Bot Integration & Moderation Engine**
-  - Integration of the classifier API with a Telegram bot for automated group/channel moderation.
-  - Implementation of threshold-based automated action policies (flag, soft-warn, delete message, or restrict user based on model confidence).
+- [ ] **Week 12: Telegram Bot Integration, Moderation Engine & Contextual Praise Disambiguation**
+  - **Telegram Bot Microservice & Group Moderation:**
+    - Integration of the FastAPI prediction endpoint with an asynchronous Telegram Bot daemon for real-time channel and group moderation.
+    - Implementation of threshold-based automated action policies (real-time message deletion above confidence threshold $\tau$, automated warning strikes, and spam quarantine).
+  - **Linguistic Boundary Refinement (Contextual Praise & Spurious Bias Mitigation):**
+    - **Issue A: Antithetical Compliments & Corrective Re-evaluation:**
+      - Resolve false-positive toxicity on rhetorical antithesis (e.g., *"u are not smart, u are genius"*, *"you are not good, you are phenomenal"*).
+      - Root cause: Local sliding-window negation matching (`not smart`) prematurely injects `not_smart` and `veiled_insult_litotes` without evaluating adjacent contrastive clauses and corrective superlatives (`genius`, `brilliant`, `gorgeous`).
+      - Solution: Implement clause-boundary and coordination-aware contrastive parsing (`[NEGATION] + [TRAIT] ... [SUPERLATIVE_PRAISE]`), suppressing `veiled_insult_litotes` and binding `antithetical_compliment`.
+    - **Issue B: Spurious Correlation & Cognitive Affirmation Disambiguation ("IQ" Praise):**
+      - Resolve false-positive toxicity on genuine intellectual compliments (e.g., *"your IQ is high"*, *"you have a high IQ"*, *"impressive IQ"*).
+      - Root cause: Dataset corpus bias where "IQ" predominantly co-occurs with insults in web comments (`low IQ`, `negative IQ`), assigning `iq` positive toxic log-odds (+0.63) which, combined with the second-person pronoun `your` (+1.65), mathematically forces benign praise into `Toxic` (71.0%).
+      - Solution: Implement symmetric cognitive praise binding in `src/preprocessing.py` for affirmative quantifiers (`high`, `superior`, `massive`, `exceptional`, `impressive` + `iq` / `intellect` / `brain` $\rightarrow$ `high_iq`, `cognitive_praise`), offsetting pronoun penalties and ensuring compliments classify reliably as `Normal`.
+    - **Comprehensive Regression & Contrastive Suite:**
+      - Automated test matrix guaranteeing genuine insults (*"low IQ idiot"*, *"you are not smart enough"*) remain 100% flagged as `Toxic`, while benevolent praise (*"your IQ is high"*, *"u are not smart, u are genius"*) is correctly routed to `Normal`.
 
 - [ ] **Week 13: End-to-End Testing & Future Roadmap**
   - End-to-end integration testing across the full pipeline on out-of-distribution messages.
